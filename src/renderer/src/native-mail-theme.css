@@ -1,0 +1,342 @@
+/* Native Mail layout: dimensions, density and materials follow the local
+   macOS Mail reference while retaining Windows-safe controls and behavior. */
+:root {
+  --mail-blue: #007aff;
+  --mail-label: #1d1d1f;
+  --mail-secondary: #6e6e73;
+  --mail-tertiary: #8e8e93;
+  --mail-separator: rgba(60, 60, 67, .20);
+  --mail-sidebar: #ececee;
+  --mail-list: #f7f7f8;
+  --mail-reader: #ffffff;
+  --mail-toolbar: #f3f3f4;
+  --mail-selection: #d9d9dc;
+  --mail-hover: rgba(118, 118, 128, .10);
+}
+
+body, .app-shell { background: var(--mail-reader); }
+.app-shell { color: var(--mail-label); }
+
+/* Integrated title bar and mailbox sidebar */
+.sidebar {
+  width: 200px;
+  flex-basis: 200px;
+  padding: 0 9px 12px;
+  color: var(--mail-label);
+  background: var(--mail-sidebar);
+  border-right: 1px solid var(--mail-separator);
+  box-shadow: none;
+  backdrop-filter: saturate(180%) blur(30px);
+}
+.sidebar-titlebar {
+  height: 52px;
+  flex: 0 0 52px;
+  -webkit-app-region: drag;
+}
+.native-section-title {
+  min-height: 18px;
+  margin: 7px 9px 3px;
+  color: var(--mail-tertiary);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.native-section-title button { -webkit-app-region: no-drag; }
+.nav-item {
+  position: relative;
+  height: 28px;
+  min-height: 28px;
+  padding: 0 8px;
+  gap: 7px;
+  color: var(--mail-label);
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 520;
+  -webkit-app-region: no-drag;
+}
+.nav-item:hover { background: var(--mail-hover); }
+.nav-item.active, .nav-item.active:hover {
+  color: var(--mail-label);
+  background: var(--mail-selection);
+}
+.nav-icon {
+  width: 15px;
+  height: 15px;
+  color: var(--mail-blue);
+}
+.unread-nav-icon::before {
+  content: "";
+  display: block;
+  width: 8px;
+  height: 8px;
+  margin: 3px;
+  border-radius: 50%;
+  background: var(--mail-blue);
+}
+.nav-item b, .account-select b {
+  min-width: 24px;
+  padding: 1px 7px;
+  color: var(--mail-secondary);
+  background: rgba(118, 118, 128, .12);
+  font-size: 10px;
+  font-weight: 500;
+}
+.account-list { gap: 0; }
+.mailbox-account-group { margin-bottom: 5px; }
+.account-group-name {
+  padding: 4px 9px 2px;
+  overflow: hidden;
+  color: var(--mail-tertiary);
+  font-size: 10px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.account-row { border-radius: 6px; }
+.account-row:hover { background: var(--mail-hover); }
+.account-row.active, .account-row.active:hover { background: var(--mail-selection); }
+.account-select {
+  min-height: 28px;
+  padding: 0 28px 0 8px;
+  gap: 7px;
+  color: var(--mail-label);
+}
+.account-copy strong { color: var(--mail-label); font-size: 11px; font-weight: 520; }
+.account-copy small { display: none; }
+.account-inbox-icon { flex: 0 0 15px; }
+.remove-account { top: 2px; right: 3px; color: var(--mail-tertiary); }
+.sidebar-footer { padding: 10px 7px 0; border-top-color: var(--mail-separator); }
+.privacy-chip { color: var(--mail-tertiary); }
+.privacy-chip > svg { width: 16px; color: #34c759; }
+.privacy-chip strong { color: var(--mail-secondary); font-size: 9px; }
+.privacy-chip span { font-size: 8px; }
+.exit-demo { color: var(--mail-blue); font-size: 10px; }
+
+/* Mail toolbar is visually split at the same point as the message list. */
+.workspace { background: var(--mail-reader); }
+.topbar {
+  height: 52px;
+  flex-basis: 52px;
+  padding: 0 10px 0 0;
+  background: var(--mail-toolbar);
+  border-bottom: 1px solid var(--mail-separator);
+  box-shadow: none;
+  backdrop-filter: saturate(180%) blur(30px);
+  -webkit-app-region: drag;
+}
+.mailbox-heading {
+  width: 400px;
+  height: 52px;
+  flex: 0 0 400px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 1px;
+  padding: 0 12px;
+  border-right: 1px solid var(--mail-separator);
+}
+.mailbox-heading h1 {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--mail-label);
+  font-size: 13px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mailbox-heading span { color: var(--mail-tertiary); font-size: 9px; }
+.topbar-actions {
+  margin-left: auto;
+  gap: 2px;
+  -webkit-app-region: no-drag;
+}
+.icon-button {
+  width: 31px;
+  height: 31px;
+  padding: 7px;
+  color: var(--mail-secondary);
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+}
+.icon-button:hover:not(:disabled) { color: var(--mail-label); background: var(--mail-hover); }
+.search-box {
+  width: 180px;
+  height: 29px;
+  color: var(--mail-tertiary);
+  background: rgba(118, 118, 128, .12);
+  border: .5px solid rgba(60,60,67,.12);
+  border-radius: 7px;
+}
+.search-box input { color: var(--mail-label); font-size: 10px; }
+[data-platform="windows"] .topbar { padding-right: 145px; }
+
+/* Compact two-line message list matching native Mail density. */
+.mail-layout { grid-template-columns: 400px minmax(0, 1fr); }
+.message-list {
+  background: var(--mail-list);
+  border-right: 1px solid var(--mail-separator);
+}
+.list-meta {
+  height: 25px;
+  padding: 0 12px;
+  color: var(--mail-tertiary);
+  background: transparent;
+  border-bottom: .5px solid var(--mail-separator);
+  font-size: 8px;
+}
+.demo-badge { color: var(--mail-secondary); background: rgba(118,118,128,.12); }
+.filter-bar { display: none; }
+.message-row {
+  min-height: 76px;
+  padding: 8px 13px 7px 31px;
+  border-bottom: .5px solid var(--mail-separator);
+  background: transparent;
+}
+.message-row:hover { background: var(--mail-hover); }
+.message-row.selected, .message-row.selected:hover {
+  color: var(--mail-label);
+  background: var(--mail-selection);
+  box-shadow: none;
+}
+.message-account-line { display: none; }
+.message-row.unread::before {
+  content: "";
+  position: absolute;
+  left: 18px;
+  top: 15px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--mail-blue);
+}
+.message-row.unread .message-row-top strong::after { display: none; }
+.message-row-top strong,
+.message-row.unread .message-row-top strong {
+  color: var(--mail-label);
+  font-size: 11px;
+  font-weight: 600;
+}
+.message-row-top time { color: var(--mail-tertiary); font-size: 9px; }
+.message-subject,
+.message-row.unread .message-subject {
+  margin-top: 2px;
+  color: var(--mail-label);
+  font-size: 10px;
+  font-weight: 450;
+  line-height: 1.3;
+}
+.message-preview {
+  margin-top: 1px;
+  color: var(--mail-secondary);
+  font-size: 9px;
+  line-height: 1.3;
+  -webkit-line-clamp: 1;
+}
+.message-row-bottom { min-height: 11px; margin-top: 2px; color: var(--mail-tertiary); }
+.message-row-bottom > span { display: none; }
+.message-row-bottom > div { margin-left: auto; }
+.message-row-bottom svg { width: 11px; height: 11px; }
+.load-more { color: var(--mail-blue); background: var(--mail-list); border-color: var(--mail-separator); }
+
+/* Reader pane mirrors Mail's restrained header and content surface. */
+.reader { background: var(--mail-reader); }
+.reader-header {
+  padding: 18px 24px 15px;
+  border-bottom: .5px solid var(--mail-separator);
+}
+.reader-account { color: var(--mail-tertiary); font-size: 8px; }
+.reader-header h2 {
+  margin: 7px 0 14px;
+  color: var(--mail-label);
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -.015em;
+}
+.avatar { width: 31px; height: 31px; flex-basis: 31px; font-size: 11px; }
+.sender-line strong { color: var(--mail-label); font-size: 10px; }
+.sender-line span, .sender-line time { color: var(--mail-tertiary); font-size: 8px; }
+.recipient-line { margin: 7px 0 0 42px; color: var(--mail-tertiary); font-size: 8px; }
+.tracking-note {
+  height: 29px;
+  color: var(--mail-secondary);
+  background: rgba(52,199,89,.055);
+  border-bottom-color: var(--mail-separator);
+  font-size: 8px;
+}
+.content-mode-bar { height: 34px; padding: 0 24px; border-bottom-color: var(--mail-separator); }
+.message-content {
+  max-width: 760px;
+  min-height: 220px;
+  margin: 0 auto;
+  padding: 25px 34px 38px;
+  color: var(--mail-label);
+  font-size: 12px;
+  line-height: 1.62;
+}
+.attachment-panel { max-width: 692px; margin: 0 auto 32px; }
+.reader-empty-icon { color: var(--mail-blue); background: rgba(0,122,255,.08); box-shadow: none; }
+.reader-empty h3 { color: var(--mail-label); font-size: 12px; font-weight: 550; }
+.reader-empty p { color: var(--mail-tertiary); font-size: 9px; }
+
+/* First-run state remains a mail account prompt, with no product branding. */
+.onboarding { background: var(--mail-reader); }
+.onboarding-mail-icon {
+  width: 66px;
+  height: 66px;
+  margin-bottom: 17px;
+  color: var(--mail-blue);
+  background: rgba(0,122,255,.09);
+  border-radius: 15px;
+  box-shadow: none;
+}
+.onboarding-mail-icon svg { width: 30px; height: 30px; }
+.onboarding h2 {
+  margin: 0 0 8px;
+  color: var(--mail-label);
+  font-size: 24px;
+  font-weight: 620;
+  letter-spacing: -.025em;
+}
+.onboarding > p { max-width: 470px; color: var(--mail-secondary); font-size: 11px; line-height: 1.55; }
+.onboarding-actions { margin-top: 21px; }
+.primary-button { background: var(--mail-blue); }
+.large-button { height: 34px; min-height: 34px; border-radius: 7px; font-size: 11px; }
+.trust-row { margin-top: 25px; color: var(--mail-tertiary); }
+
+@media (max-width: 1180px) {
+  .sidebar { width: 200px; flex-basis: 200px; }
+  .mail-layout { grid-template-columns: 370px 1fr; }
+  .mailbox-heading { width: 370px; flex-basis: 370px; }
+}
+
+@media (max-width: 900px) {
+  .sidebar { width: 72px; flex-basis: 72px; }
+  .sidebar-titlebar { height: 45px; flex-basis: 45px; }
+  .account-group-name { display: none; }
+  .mail-layout { grid-template-columns: 1fr; }
+  .mailbox-heading { width: auto; flex: 1 1 auto; border-right: 0; }
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --mail-blue: #0a84ff;
+    --mail-label: #f2f2f7;
+    --mail-secondary: #a1a1a6;
+    --mail-tertiary: #737378;
+    --mail-separator: rgba(235, 235, 245, .14);
+    --mail-sidebar: rgba(43, 43, 45, .96);
+    --mail-list: #232325;
+    --mail-reader: #1c1c1e;
+    --mail-toolbar: rgba(38, 38, 40, .97);
+    --mail-selection: #48484a;
+    --mail-hover: rgba(118, 118, 128, .17);
+  }
+  body, .app-shell, .workspace, .reader, .onboarding { background: var(--mail-reader); }
+  .message-row.selected, .message-row.selected:hover { color: var(--mail-label); }
+  .search-box:focus-within { background: #323235; }
+  .reader-empty-icon, .onboarding-mail-icon { background: rgba(10,132,255,.11); }
+  .account-modal { background: rgba(40,40,42,.98); }
+}
