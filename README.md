@@ -1,8 +1,92 @@
 # Mail
 
-一个面向 Windows 的多邮箱阅读器。它通过 IMAP 连接邮箱，在本机汇总、搜索和查看邮件。
+[English](#english) · [中文](#中文)
 
 ![Mail 三栏界面](docs/screenshot.png)
+
+## English
+
+Mail is a Windows desktop reader for multiple email accounts. It connects through IMAP and lets you view, filter, and search recent messages in one inbox.
+
+### Features
+
+- Multiple IMAP accounts
+- Presets for Gmail, iCloud, Yahoo, QQ Mail, NetEase, and custom IMAP servers
+- Unified inbox and per-account filtering
+- Search by sender or subject
+- Unread, starred, and attachment filters
+- Sanitized HTML and plain-text message views
+- On-demand attachment downloads with a save dialog
+- Credentials encrypted with Electron `safeStorage` and Windows DPAPI
+- Read-only IMAP access
+- Remote images, tracking pixels, scripts, and event handlers blocked by default
+- Three-pane interface based on the layout and density of macOS Mail
+- Automatic light and dark appearance
+
+The current version does not send, move, delete, or mark messages on the server.
+
+### Email account setup
+
+Most providers no longer allow third-party clients to use the main account password:
+
+- Gmail: enable two-step verification and create an app password.
+- iCloud: create an app-specific password in Apple Account settings.
+- QQ Mail / NetEase: enable IMAP and generate an authorization code or client password.
+- Outlook / Microsoft 365: most accounts require OAuth 2.0. OAuth is not included in this version, so only accounts that still support app passwords can connect.
+
+Use a revocable app password instead of the main account password.
+
+### Development
+
+Node.js 20.19+ or 22.12+ and pnpm are required.
+
+```bash
+pnpm install
+pnpm dev
+```
+
+Run checks:
+
+```bash
+pnpm typecheck
+pnpm test
+pnpm build
+```
+
+Build the Windows x64 portable ZIP:
+
+```bash
+pnpm dist:win
+```
+
+Build the NSIS installer on Windows or an Intel-compatible environment:
+
+```bash
+pnpm dist:win:installer
+```
+
+Build output is written to `release/`.
+
+### Security
+
+- The renderer uses context isolation and sandboxing with Node.js integration disabled.
+- The preload exposes a limited IPC API.
+- Saved IMAP credentials are never returned to the renderer after decryption.
+- TLS 1.2 or newer is required and invalid certificates are rejected.
+- Message HTML is sanitized with an allowlist.
+- External links open in the system browser.
+
+Removing an account only removes its local connection settings. It does not modify messages on the server.
+
+### License
+
+MIT
+
+---
+
+## 中文
+
+一个面向 Windows 的多邮箱阅读器。它通过 IMAP 连接邮箱，在本机汇总、筛选、搜索和查看邮件。
 
 ## 当前版本
 
