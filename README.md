@@ -2,7 +2,7 @@
 
 [English](#english) · [中文](#中文)
 
-![Mail 三栏界面](docs/screenshot.png)
+![Mail three-pane interface](docs/screenshot.png)
 
 ## English
 
@@ -22,6 +22,7 @@ Mail is a Windows desktop reader for multiple email accounts. It connects throug
 - Remote images, tracking pixels, scripts, and event handlers blocked by default
 - Three-pane interface based on the layout and density of macOS Mail
 - Automatic light and dark appearance
+- English and Simplified Chinese interface with system-language detection and an in-app switch
 
 The current version does not send, move, delete, or mark messages on the server.
 
@@ -105,6 +106,7 @@ MIT
 - 内置演示数据，不添加真实邮箱也能查看界面
 - 参照 macOS Mail 的三栏比例、侧栏分组、邮件密度与融合标题栏
 - 无品牌主页，自动跟随系统浅色/深色外观
+- 支持英文和简体中文，默认跟随系统语言，也可在应用内切换
 
 当前版本不会发送、移动、删除或标记服务器上的邮件。
 

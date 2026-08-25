@@ -1,7 +1,9 @@
 import { contextBridge, ipcRenderer } from 'electron'
+import type { AppLocale } from '../shared/i18n'
 import type { AccountInput, MailApi } from '../shared/types'
 
 const api: MailApi = {
+  setLocale: (locale: AppLocale) => ipcRenderer.invoke('app:set-locale', locale),
   listAccounts: () => ipcRenderer.invoke('accounts:list'),
   addAccount: (input: AccountInput) => ipcRenderer.invoke('accounts:add', input),
   removeAccount: (accountId: string) => ipcRenderer.invoke('accounts:remove', accountId),

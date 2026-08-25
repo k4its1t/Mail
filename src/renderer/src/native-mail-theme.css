@@ -107,6 +107,26 @@ body, .app-shell { background: var(--mail-reader); }
 .account-inbox-icon { flex: 0 0 15px; }
 .remove-account { top: 2px; right: 3px; color: var(--mail-tertiary); }
 .sidebar-footer { padding: 10px 7px 0; border-top-color: var(--mail-separator); }
+.language-switcher {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 7px;
+  margin-bottom: 7px;
+  color: var(--mail-tertiary);
+  font-size: 9px;
+}
+.language-switcher select {
+  min-width: 82px;
+  height: 24px;
+  padding: 0 22px 0 7px;
+  color: var(--mail-secondary);
+  background: rgba(118, 118, 128, .10);
+  border: 1px solid rgba(118, 118, 128, .16);
+  border-radius: 6px;
+  font: inherit;
+  font-size: 9px;
+}
 .privacy-chip { color: var(--mail-tertiary); }
 .privacy-chip > svg { width: 16px; color: #34c759; }
 .privacy-chip strong { color: var(--mail-secondary); font-size: 9px; }
@@ -318,6 +338,8 @@ body, .app-shell { background: var(--mail-reader); }
   .account-group-name { display: none; }
   .mail-layout { grid-template-columns: 1fr; }
   .mailbox-heading { width: auto; flex: 1 1 auto; border-right: 0; }
+  .language-switcher > span { display: none; }
+  .language-switcher select { min-width: 46px; width: 46px; padding-left: 4px; }
 }
 
 @media (prefers-color-scheme: dark) {

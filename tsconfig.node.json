@@ -16,6 +16,8 @@
     "electron.vite.config.*",
     "src/main/**/*.ts",
     "src/preload/**/*.ts",
+    "src/renderer/src/demo.ts",
+    "src/renderer/src/i18n.ts",
     "src/shared/**/*.ts",
     "tests/**/*.ts"
   ]

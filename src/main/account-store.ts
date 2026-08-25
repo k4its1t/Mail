@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { app, safeStorage } from 'electron'
+import { coreString, type AppLocale } from '../shared/i18n'
 import type { AccountInput, AccountPublic } from '../shared/types'
 
 interface StoredAccount extends AccountPublic {
@@ -22,15 +23,15 @@ export class AccountStore {
     this.filePath = filePath
   }
 
-  async list(): Promise<AccountPublic[]> {
-    const data = await this.readStore()
+  async list(locale: AppLocale = 'en'): Promise<AccountPublic[]> {
+    const data = await this.readStore(locale)
     return data.accounts.map(({ encryptedPassword: _secret, ...account }) => account)
   }
 
-  async getDecrypted(accountId: string): Promise<AccountInput & { id: string }> {
-    const data = await this.readStore()
+  async getDecrypted(accountId: string, locale: AppLocale = 'en'): Promise<AccountInput & { id: string }> {
+    const data = await this.readStore(locale)
     const account = data.accounts.find((item) => item.id === accountId)
-    if (!account) throw new Error('找不到该邮箱账号。')
+    if (!account) throw new Error(coreString(locale, 'accountNotFound'))
 
     const password = await this.decrypt(account.encryptedPassword)
     return {
@@ -47,11 +48,11 @@ export class AccountStore {
     }
   }
 
-  async add(input: AccountInput): Promise<AccountPublic> {
-    const data = await this.readStore()
+  async add(input: AccountInput, locale: AppLocale = 'en'): Promise<AccountPublic> {
+    const data = await this.readStore(locale)
     const normalizedEmail = input.email.trim().toLowerCase()
     if (data.accounts.some((item) => item.email.toLowerCase() === normalizedEmail)) {
-      throw new Error('这个邮箱已经添加过了。')
+      throw new Error(coreString(locale, 'accountAlreadyAdded'))
     }
 
     const account: StoredAccount = {
@@ -65,7 +66,7 @@ export class AccountStore {
       secure: input.secure,
       color: input.color,
       createdAt: new Date().toISOString(),
-      encryptedPassword: await this.encrypt(input.password)
+      encryptedPassword: await this.encrypt(input.password, locale)
     }
     data.accounts.push(account)
     await this.writeStore(data)
@@ -73,16 +74,16 @@ export class AccountStore {
     return publicAccount
   }
 
-  async remove(accountId: string): Promise<void> {
-    const data = await this.readStore()
+  async remove(accountId: string, locale: AppLocale = 'en'): Promise<void> {
+    const data = await this.readStore(locale)
     const nextAccounts = data.accounts.filter((item) => item.id !== accountId)
     if (nextAccounts.length === data.accounts.length) return
     await this.writeStore({ ...data, accounts: nextAccounts })
   }
 
-  private async encrypt(value: string): Promise<string> {
+  private async encrypt(value: string, locale: AppLocale): Promise<string> {
     const available = await safeStorage.isAsyncEncryptionAvailable()
-    if (!available) throw new Error('当前系统的安全存储不可用，账号没有保存。')
+    if (!available) throw new Error(coreString(locale, 'secureStorageUnavailable'))
     const encrypted = await safeStorage.encryptStringAsync(value)
     return encrypted.toString('base64')
   }
@@ -93,7 +94,7 @@ export class AccountStore {
     return decrypted.result
   }
 
-  private async readStore(): Promise<StoreShape> {
+  private async readStore(locale: AppLocale): Promise<StoreShape> {
     try {
       const raw = await readFile(this.filePath, 'utf8')
       const parsed = JSON.parse(raw) as Partial<StoreShape>
@@ -102,7 +103,7 @@ export class AccountStore {
     } catch (error) {
       const nodeError = error as NodeJS.ErrnoException
       if (nodeError.code === 'ENOENT') return { ...EMPTY_STORE }
-      throw new Error('无法读取本地账号数据。')
+      throw new Error(coreString(locale, 'accountStoreReadFailed'))
     }
   }
 

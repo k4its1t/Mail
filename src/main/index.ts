@@ -4,23 +4,25 @@ import { writeFile } from 'node:fs/promises'
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import { AccountStore } from './account-store'
 import { fetchAttachment, fetchMessageDetail, fetchMessageSummaries, testImapConnection } from './mail-service'
+import { coreString, normalizeLocale, type AppLocale } from '../shared/i18n'
 import type { AccountInput, SyncResult } from '../shared/types'
 
 const currentDir = dirname(fileURLToPath(import.meta.url))
+let activeLocale: AppLocale = 'en'
 
-function readableError(error: unknown): string {
-  if (!(error instanceof Error)) return '发生未知错误。'
+function readableError(error: unknown, locale: AppLocale): string {
+  if (!(error instanceof Error)) return coreString(locale, 'unknownError')
   const message = error.message.replace(/^Error:\s*/i, '').trim()
   if (/authentication|auth.*fail|invalid credentials|login failed/i.test(message)) {
-    return '登录失败，请检查邮箱账号、应用密码或授权码。'
+    return coreString(locale, 'authenticationFailed')
   }
   if (/certificate|self signed|unable to verify/i.test(message)) {
-    return '服务器证书验证失败。为保护账号，应用已拒绝连接。'
+    return coreString(locale, 'certificateFailed')
   }
   if (/timeout|timed out|etimedout/i.test(message)) {
-    return '连接邮箱服务器超时，请检查网络和 IMAP 设置。'
+    return coreString(locale, 'connectionTimeout')
   }
-  return message || '邮箱操作失败。'
+  return message || coreString(locale, 'mailOperationFailed')
 }
 
 function createWindow(): BrowserWindow {
@@ -63,50 +65,54 @@ function createWindow(): BrowserWindow {
 }
 
 function registerIpc(store: AccountStore): void {
-  ipcMain.handle('accounts:list', () => store.list())
+  ipcMain.handle('app:set-locale', (_event, locale: string) => {
+    activeLocale = normalizeLocale(locale)
+  })
+
+  ipcMain.handle('accounts:list', () => store.list(activeLocale))
 
   ipcMain.handle('accounts:test', async (_event, input: AccountInput) => {
     try {
-      await testImapConnection(input)
+      await testImapConnection(input, activeLocale)
       return { ok: true as const }
     } catch (error) {
-      throw new Error(readableError(error))
+      throw new Error(readableError(error, activeLocale))
     }
   })
 
   ipcMain.handle('accounts:add', async (_event, input: AccountInput) => {
     try {
-      await testImapConnection(input)
-      return await store.add(input)
+      await testImapConnection(input, activeLocale)
+      return await store.add(input, activeLocale)
     } catch (error) {
-      throw new Error(readableError(error))
+      throw new Error(readableError(error, activeLocale))
     }
   })
 
   ipcMain.handle('accounts:remove', async (_event, accountId: string) => {
-    await store.remove(accountId)
+    await store.remove(accountId, activeLocale)
   })
 
   ipcMain.handle('mail:sync-account', async (_event, accountId: string, limit?: number) => {
     try {
-      const account = await store.getDecrypted(accountId)
-      return await fetchMessageSummaries(account, limit)
+      const account = await store.getDecrypted(accountId, activeLocale)
+      return await fetchMessageSummaries(account, limit, activeLocale)
     } catch (error) {
-      throw new Error(readableError(error))
+      throw new Error(readableError(error, activeLocale))
     }
   })
 
   ipcMain.handle('mail:sync-all', async (_event, limit?: number): Promise<SyncResult> => {
-    const accounts = await store.list()
+    const accounts = await store.list(activeLocale)
     const settled = await Promise.allSettled(
       accounts.map(async (account) => {
-        const decrypted = await store.getDecrypted(account.id)
-        return fetchMessageSummaries(decrypted, limit)
+        const decrypted = await store.getDecrypted(account.id, activeLocale)
+        return fetchMessageSummaries(decrypted, limit, activeLocale)
       })
     )
     const messages = settled.flatMap((result) => result.status === 'fulfilled' ? result.value : [])
     const errors = settled.flatMap((result, index) => result.status === 'rejected'
-      ? [{ accountId: accounts[index].id, message: readableError(result.reason) }]
+      ? [{ accountId: accounts[index].id, message: readableError(result.reason, activeLocale) }]
       : [])
     return {
       messages: messages.sort((a, b) => Date.parse(b.date) - Date.parse(a.date)),
@@ -117,31 +123,31 @@ function registerIpc(store: AccountStore): void {
 
   ipcMain.handle('mail:get-message', async (_event, accountId: string, uid: number) => {
     try {
-      const account = await store.getDecrypted(accountId)
-      return await fetchMessageDetail(account, uid)
+      const account = await store.getDecrypted(accountId, activeLocale)
+      return await fetchMessageDetail(account, uid, activeLocale)
     } catch (error) {
-      throw new Error(readableError(error))
+      throw new Error(readableError(error, activeLocale))
     }
   })
 
   ipcMain.handle('mail:download-attachment', async (_event, accountId: string, uid: number, attachmentIndex: number) => {
     try {
-      const account = await store.getDecrypted(accountId)
-      const attachment = await fetchAttachment(account, uid, attachmentIndex)
+      const account = await store.getDecrypted(accountId, activeLocale)
+      const attachment = await fetchAttachment(account, uid, attachmentIndex, activeLocale)
       const safeFilename = attachment.filename
         .replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_')
         .replace(/^\.+/, '')
         .slice(0, 180) || `attachment-${attachmentIndex + 1}`
       const result = await dialog.showSaveDialog({
-        title: '保存邮件附件',
+        title: coreString(activeLocale, 'saveAttachmentTitle'),
         defaultPath: safeFilename,
-        buttonLabel: '保存'
+        buttonLabel: coreString(activeLocale, 'save')
       })
       if (result.canceled || !result.filePath) return { saved: false }
       await writeFile(result.filePath, attachment.content)
       return { saved: true, path: result.filePath }
     } catch (error) {
-      throw new Error(readableError(error))
+      throw new Error(readableError(error, activeLocale))
     }
   })
 }
@@ -159,6 +165,7 @@ if (!hasSingleInstanceLock) {
   })
 
   app.whenReady().then(() => {
+    activeLocale = normalizeLocale(app.getLocale())
     app.setAppUserModelId('com.mail.desktop')
     registerIpc(new AccountStore())
     createWindow()

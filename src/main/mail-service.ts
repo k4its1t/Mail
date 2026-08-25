@@ -1,6 +1,7 @@
 import { ImapFlow } from 'imapflow'
 import { simpleParser } from 'mailparser'
 import sanitizeHtml from 'sanitize-html'
+import { coreString, type AppLocale } from '../shared/i18n'
 import type { AccountInput, MessageDetail, MessageSummary } from '../shared/types'
 
 type MailAccount = AccountInput & { id: string }
@@ -12,17 +13,17 @@ function clampLimit(limit = 50): number {
   return Math.max(1, Math.min(MAX_LIMIT, Math.floor(limit)))
 }
 
-function validateAccount(account: AccountInput): void {
-  if (!account.imapHost.trim()) throw new Error('请填写 IMAP 服务器地址。')
+function validateAccount(account: AccountInput, locale: AppLocale): void {
+  if (!account.imapHost.trim()) throw new Error(coreString(locale, 'imapHostRequired'))
   if (!Number.isInteger(account.imapPort) || account.imapPort < 1 || account.imapPort > 65535) {
-    throw new Error('IMAP 端口无效。')
+    throw new Error(coreString(locale, 'imapPortInvalid'))
   }
-  if (!account.username.trim()) throw new Error('请填写登录用户名。')
-  if (!account.password) throw new Error('请填写应用密码或授权码。')
+  if (!account.username.trim()) throw new Error(coreString(locale, 'usernameRequired'))
+  if (!account.password) throw new Error(coreString(locale, 'passwordRequired'))
 }
 
-function createClient(account: AccountInput): ImapFlow {
-  validateAccount(account)
+function createClient(account: AccountInput, locale: AppLocale): ImapFlow {
+  validateAccount(account, locale)
   return new ImapFlow({
     host: account.imapHost.trim(),
     port: account.imapPort,
@@ -64,7 +65,7 @@ function attachmentInStructure(node: unknown): boolean {
   return Array.isArray(children) && children.some(attachmentInStructure)
 }
 
-function summaryFromMessage(accountId: string, message: Record<string, unknown>): MessageSummary {
+function summaryFromMessage(accountId: string, message: Record<string, unknown>, locale: AppLocale): MessageSummary {
   const envelope = (message.envelope ?? {}) as Record<string, unknown>
   const from = (envelope.from ?? []) as Array<{ name?: string; address?: string }>
   const firstFrom = from[0]
@@ -80,8 +81,8 @@ function summaryFromMessage(accountId: string, message: Record<string, unknown>)
     id: `${accountId}:${uid}`,
     accountId,
     uid,
-    subject: String(envelope.subject || '（无主题）'),
-    fromName: firstFrom?.name || firstFrom?.address || '未知发件人',
+    subject: String(envelope.subject || coreString(locale, 'noSubject')),
+    fromName: firstFrom?.name || firstFrom?.address || coreString(locale, 'unknownSender'),
     fromAddress: firstFrom?.address || '',
     to: addressText((envelope.to ?? []) as Array<{ name?: string; address?: string }>),
     date: messageDate.toISOString(),
@@ -119,8 +120,8 @@ export function sanitizeEmailHtml(html: string): string {
   })
 }
 
-export async function testImapConnection(account: AccountInput): Promise<void> {
-  const client = createClient(account)
+export async function testImapConnection(account: AccountInput, locale: AppLocale = 'en'): Promise<void> {
+  const client = createClient(account, locale)
   try {
     await client.connect()
     await client.mailboxOpen('INBOX', { readOnly: true })
@@ -129,8 +130,8 @@ export async function testImapConnection(account: AccountInput): Promise<void> {
   }
 }
 
-export async function fetchMessageSummaries(account: MailAccount, requestedLimit = 50): Promise<MessageSummary[]> {
-  const client = createClient(account)
+export async function fetchMessageSummaries(account: MailAccount, requestedLimit = 50, locale: AppLocale = 'en'): Promise<MessageSummary[]> {
+  const client = createClient(account, locale)
   const limit = clampLimit(requestedLimit)
   try {
     await client.connect()
@@ -149,7 +150,7 @@ export async function fetchMessageSummaries(account: MailAccount, requestedLimit
         bodyStructure: true,
         size: true
       })) {
-        messages.push(summaryFromMessage(account.id, message as unknown as Record<string, unknown>))
+        messages.push(summaryFromMessage(account.id, message as unknown as Record<string, unknown>, locale))
       }
       return messages.sort((a, b) => Date.parse(b.date) - Date.parse(a.date))
     } finally {
@@ -160,9 +161,9 @@ export async function fetchMessageSummaries(account: MailAccount, requestedLimit
   }
 }
 
-export async function fetchMessageDetail(account: MailAccount, uid: number): Promise<MessageDetail> {
-  if (!Number.isInteger(uid) || uid < 1) throw new Error('邮件编号无效。')
-  const client = createClient(account)
+export async function fetchMessageDetail(account: MailAccount, uid: number, locale: AppLocale = 'en'): Promise<MessageDetail> {
+  if (!Number.isInteger(uid) || uid < 1) throw new Error(coreString(locale, 'messageIdInvalid'))
+  const client = createClient(account, locale)
   try {
     await client.connect()
     const lock = await client.getMailboxLock('INBOX', { readOnly: true })
@@ -176,13 +177,13 @@ export async function fetchMessageDetail(account: MailAccount, uid: number): Pro
         size: true,
         source: true
       }, { uid: true })
-      if (!message || !message.source) throw new Error('邮件不存在，或已从服务器删除。')
+      if (!message || !message.source) throw new Error(coreString(locale, 'messageNotFound'))
 
       const parsed = await simpleParser(message.source, {
         skipImageLinks: true,
         maxHtmlLengthToParse: 2_000_000
       })
-      const summary = summaryFromMessage(account.id, message as unknown as Record<string, unknown>)
+      const summary = summaryFromMessage(account.id, message as unknown as Record<string, unknown>, locale)
       const rawHtml = typeof parsed.html === 'string' ? parsed.html : parsed.textAsHtml || ''
 
       return {
@@ -192,7 +193,7 @@ export async function fetchMessageDetail(account: MailAccount, uid: number): Pro
         messageId: parsed.messageId || '',
         attachments: parsed.attachments.map((attachment, index) => ({
           index,
-          filename: attachment.filename || '未命名附件',
+          filename: attachment.filename || coreString(locale, 'unnamedAttachment'),
           contentType: attachment.contentType,
           size: attachment.size
         }))
@@ -208,23 +209,24 @@ export async function fetchMessageDetail(account: MailAccount, uid: number): Pro
 export async function fetchAttachment(
   account: MailAccount,
   uid: number,
-  attachmentIndex: number
+  attachmentIndex: number,
+  locale: AppLocale = 'en'
 ): Promise<{ filename: string; contentType: string; content: Buffer }> {
-  if (!Number.isInteger(uid) || uid < 1) throw new Error('邮件编号无效。')
-  if (!Number.isInteger(attachmentIndex) || attachmentIndex < 0) throw new Error('附件编号无效。')
+  if (!Number.isInteger(uid) || uid < 1) throw new Error(coreString(locale, 'messageIdInvalid'))
+  if (!Number.isInteger(attachmentIndex) || attachmentIndex < 0) throw new Error(coreString(locale, 'attachmentIdInvalid'))
 
-  const client = createClient(account)
+  const client = createClient(account, locale)
   try {
     await client.connect()
     const lock = await client.getMailboxLock('INBOX', { readOnly: true })
     try {
       const message = await client.fetchOne(uid, { source: true }, { uid: true })
-      if (!message || !message.source) throw new Error('邮件不存在，或已从服务器删除。')
+      if (!message || !message.source) throw new Error(coreString(locale, 'messageNotFound'))
       const parsed = await simpleParser(message.source, { skipImageLinks: true })
       const attachment = parsed.attachments[attachmentIndex]
-      if (!attachment) throw new Error('找不到该附件。')
+      if (!attachment) throw new Error(coreString(locale, 'attachmentNotFound'))
       return {
-        filename: attachment.filename || `attachment-${attachmentIndex + 1}`,
+        filename: attachment.filename || coreString(locale, 'unnamedAttachment'),
         contentType: attachment.contentType,
         content: attachment.content
       }

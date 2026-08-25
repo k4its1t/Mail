@@ -1,3 +1,5 @@
+import type { AppLocale } from './i18n'
+
 export type ProviderId = 'gmail' | 'outlook' | 'icloud' | 'yahoo' | 'qq' | 'netease' | 'custom'
 
 export interface ProviderPreset {
@@ -6,7 +8,6 @@ export interface ProviderPreset {
   host: string
   port: number
   secure: boolean
-  credentialHint: string
 }
 
 export interface AccountInput {
@@ -73,6 +74,7 @@ export interface SyncResult {
 }
 
 export interface MailApi {
+  setLocale(locale: AppLocale): Promise<void>
   listAccounts(): Promise<AccountPublic[]>
   addAccount(input: AccountInput): Promise<AccountPublic>
   removeAccount(accountId: string): Promise<void>

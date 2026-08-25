@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { normalizeLocale, type AppLocale } from '../../shared/i18n'
 import type { AccountPublic, MessageDetail, MessageSummary, SyncError } from '../../shared/types'
 import AccountModal from './AccountModal'
-import { demoAccounts, demoDetails, demoMessages, demoPreviews } from './demo'
+import { getDemoData } from './demo'
+import { translator, type Translator } from './i18n'
 import {
   AlertIcon, ArrowLeftIcon, EyeIcon, InboxIcon, PaperclipIcon,
   PlusIcon, RefreshIcon, SearchIcon, ShieldIcon, StarIcon, TrashIcon
@@ -10,27 +12,30 @@ import {
 type MailFilter = 'all' | 'unread' | 'flagged' | 'attachments'
 type ContentMode = 'html' | 'text'
 
-function cleanError(error: unknown): string {
-  if (!(error instanceof Error)) return '操作失败，请稍后重试。'
+function cleanError(error: unknown, t: Translator): string {
+  if (!(error instanceof Error)) return t('genericError')
   const parts = error.message.split('Error: ')
   return parts.at(-1)?.trim() || error.message
 }
 
-function formatMessageDate(value: string): string {
+function formatMessageDate(value: string, locale: AppLocale): string {
   const date = new Date(value)
   const now = new Date()
+  const dateLocale = locale === 'zh-CN' ? 'zh-CN' : 'en-US'
   if (date.toDateString() === now.toDateString()) {
-    return new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false }).format(date)
+    return new Intl.DateTimeFormat(dateLocale, {
+      hour: 'numeric', minute: '2-digit', hour12: locale === 'en'
+    }).format(date)
   }
   if (date.getFullYear() === now.getFullYear()) {
-    return new Intl.DateTimeFormat('zh-CN', { month: 'numeric', day: 'numeric' }).format(date)
+    return new Intl.DateTimeFormat(dateLocale, { month: 'short', day: 'numeric' }).format(date)
   }
-  return new Intl.DateTimeFormat('zh-CN', { year: '2-digit', month: 'numeric', day: 'numeric' }).format(date)
+  return new Intl.DateTimeFormat(dateLocale, { year: '2-digit', month: 'numeric', day: 'numeric' }).format(date)
 }
 
-function formatFullDate(value: string): string {
-  return new Intl.DateTimeFormat('zh-CN', {
-    year: 'numeric', month: 'long', day: 'numeric', weekday: 'short', hour: '2-digit', minute: '2-digit'
+function formatFullDate(value: string, locale: AppLocale): string {
+  return new Intl.DateTimeFormat(locale === 'zh-CN' ? 'zh-CN' : 'en-US', {
+    year: 'numeric', month: 'long', day: 'numeric', weekday: 'short', hour: 'numeric', minute: '2-digit'
   }).format(new Date(value))
 }
 
@@ -41,6 +46,9 @@ function formatBytes(bytes: number): string {
 }
 
 export default function App() {
+  const [locale, setLocale] = useState<AppLocale>(() => normalizeLocale(localStorage.getItem('mail.locale') || navigator.language))
+  const t = useMemo(() => translator(locale), [locale])
+  const demoData = useMemo(() => getDemoData(locale), [locale])
   const [accounts, setAccounts] = useState<AccountPublic[]>([])
   const [messages, setMessages] = useState<MessageSummary[]>([])
   const [selectedAccount, setSelectedAccount] = useState('all')
@@ -62,11 +70,11 @@ export default function App() {
   const initialized = useRef(false)
   const detailRequestId = useRef(0)
 
-  const visibleAccounts = demoMode ? demoAccounts : accounts
-  const sourceMessages = demoMode ? demoMessages : messages
+  const visibleAccounts = demoMode ? demoData.accounts : accounts
+  const sourceMessages = demoMode ? demoData.messages : messages
 
   const filteredMessages = useMemo(() => {
-    const normalizedQuery = query.trim().toLocaleLowerCase('zh-CN')
+    const normalizedQuery = query.trim().toLocaleLowerCase(locale)
     return sourceMessages.filter((message) => {
       if (selectedAccount !== 'all' && message.accountId !== selectedAccount) return false
       if (mailFilter === 'unread' && !message.unread) return false
@@ -74,15 +82,21 @@ export default function App() {
       if (mailFilter === 'attachments' && !message.hasAttachments) return false
       if (!normalizedQuery) return true
       return [message.subject, message.fromName, message.fromAddress, message.to]
-        .some((value) => value.toLocaleLowerCase('zh-CN').includes(normalizedQuery))
+        .some((value) => value.toLocaleLowerCase(locale).includes(normalizedQuery))
     })
-  }, [sourceMessages, selectedAccount, query, mailFilter])
+  }, [sourceMessages, selectedAccount, query, mailFilter, locale])
 
   useEffect(() => {
-    if (initialized.current) return
-    initialized.current = true
-    void initialize()
-  }, [])
+    document.documentElement.lang = locale
+    localStorage.setItem('mail.locale', locale)
+    if (!initialized.current) {
+      initialized.current = true
+      void window.mail.setLocale(locale).then(initialize)
+      return
+    }
+    void window.mail.setLocale(locale)
+    clearSelectedMessage()
+  }, [locale])
 
   async function initialize() {
     try {
@@ -90,7 +104,7 @@ export default function App() {
       setAccounts(savedAccounts)
       if (savedAccounts.length) await syncMail()
     } catch (error) {
-      setFatalError(cleanError(error))
+      setFatalError(cleanError(error, t))
     }
   }
 
@@ -104,12 +118,10 @@ export default function App() {
       setLastSynced(result.syncedAt)
       if (selectedMessage) {
         const refreshed = result.messages.find((message) => message.id === selectedMessage.id)
-        if (!refreshed) {
-          clearSelectedMessage()
-        }
+        if (!refreshed) clearSelectedMessage()
       }
     } catch (error) {
-      setFatalError(cleanError(error))
+      setFatalError(cleanError(error, t))
     } finally {
       setSyncing(false)
     }
@@ -124,11 +136,11 @@ export default function App() {
     setDetailLoading(true)
     try {
       const nextDetail = demoMode
-        ? demoDetails[message.id]
+        ? demoData.details[message.id]
         : await window.mail.getMessage(message.accountId, message.uid)
       if (requestId === detailRequestId.current) setDetail(nextDetail)
     } catch (error) {
-      if (requestId === detailRequestId.current) setFatalError(cleanError(error))
+      if (requestId === detailRequestId.current) setFatalError(cleanError(error, t))
     } finally {
       if (requestId === detailRequestId.current) setDetailLoading(false)
     }
@@ -155,12 +167,12 @@ export default function App() {
 
   async function downloadAttachment(attachmentIndex: number) {
     if (!selectedMessage || demoMode) return
-    setDownloadNotice('正在准备附件…')
+    setDownloadNotice(t('preparingAttachment'))
     try {
       const result = await window.mail.downloadAttachment(selectedMessage.accountId, selectedMessage.uid, attachmentIndex)
-      setDownloadNotice(result.saved ? '附件已保存。' : '')
+      setDownloadNotice(result.saved ? t('attachmentSaved') : '')
     } catch (error) {
-      setDownloadNotice(cleanError(error))
+      setDownloadNotice(cleanError(error, t))
     }
   }
 
@@ -171,18 +183,15 @@ export default function App() {
   }
 
   async function removeAccount(account: AccountPublic) {
-    const confirmed = window.confirm(`移除邮箱“${account.label}”？\n\n这只会删除本机连接信息，不会影响服务器上的邮件。`)
-    if (!confirmed) return
+    if (!window.confirm(t('removeConfirm', { account: account.label }))) return
     try {
       await window.mail.removeAccount(account.id)
       setAccounts((current) => current.filter((item) => item.id !== account.id))
       setMessages((current) => current.filter((message) => message.accountId !== account.id))
       if (selectedAccount === account.id) setSelectedAccount('all')
-      if (selectedMessage?.accountId === account.id) {
-        clearSelectedMessage()
-      }
+      if (selectedMessage?.accountId === account.id) clearSelectedMessage()
     } catch (error) {
-      setFatalError(cleanError(error))
+      setFatalError(cleanError(error, t))
     }
   }
 
@@ -212,40 +221,40 @@ export default function App() {
   const unreadCount = filteredMessages.filter((message) => message.unread).length
   const selectedAccountName = visibleAccounts.find((account) => account.id === selectedAccount)?.label
   const mailboxTitle = selectedAccount !== 'all'
-    ? `收件箱 — ${selectedAccountName || '邮箱'}`
+    ? t('mailboxForAccount', { account: selectedAccountName || t('mailboxes') })
     : mailFilter === 'unread'
-      ? '未读'
+      ? t('unread')
       : mailFilter === 'flagged'
-        ? '已加星标'
+        ? t('starred')
         : mailFilter === 'attachments'
-          ? '附件'
-          : '收件箱'
+          ? t('attachments')
+          : t('inbox')
 
   return (
     <div className="app-shell">
-      <aside className="sidebar" aria-label="邮箱侧边栏">
+      <aside className="sidebar" aria-label={t('mailboxes')}>
         <div className="sidebar-titlebar" aria-hidden="true" />
-        <div className="sidebar-section-title native-section-title"><span>个人收藏</span></div>
+        <div className="sidebar-section-title native-section-title"><span>{t('personalFavorites')}</span></div>
         <button
           className={selectedAccount === 'all' && mailFilter === 'all' ? 'nav-item active' : 'nav-item'}
           onClick={() => selectMailbox('all')}
         >
-          <span className="nav-icon"><InboxIcon /></span><span>收件箱</span>
+          <span className="nav-icon"><InboxIcon /></span><span>{t('inbox')}</span>
           <b>{sourceMessages.filter((message) => message.unread).length || ''}</b>
         </button>
 
-        <div className="sidebar-section-title native-section-title"><span>智能邮箱</span></div>
+        <div className="sidebar-section-title native-section-title"><span>{t('smartMailboxes')}</span></div>
         <button className={mailFilter === 'unread' ? 'nav-item active' : 'nav-item'} onClick={() => selectSmartMailbox('unread')}>
-          <span className="nav-icon unread-nav-icon" /><span>未读</span>
+          <span className="nav-icon unread-nav-icon" /><span>{t('unread')}</span>
         </button>
         <button className={mailFilter === 'flagged' ? 'nav-item active' : 'nav-item'} onClick={() => selectSmartMailbox('flagged')}>
-          <span className="nav-icon"><StarIcon /></span><span>已加星标</span>
+          <span className="nav-icon"><StarIcon /></span><span>{t('starred')}</span>
         </button>
         <button className={mailFilter === 'attachments' ? 'nav-item active' : 'nav-item'} onClick={() => selectSmartMailbox('attachments')}>
-          <span className="nav-icon"><PaperclipIcon /></span><span>附件</span>
+          <span className="nav-icon"><PaperclipIcon /></span><span>{t('attachments')}</span>
         </button>
 
-        <div className="sidebar-section-title native-section-title"><span>邮箱</span><button onClick={() => setShowAccountModal(true)} aria-label="添加邮箱"><PlusIcon /></button></div>
+        <div className="sidebar-section-title native-section-title"><span>{t('mailboxes')}</span><button onClick={() => setShowAccountModal(true)} aria-label={t('addMailbox')}><PlusIcon /></button></div>
         <div className="account-list">
           {visibleAccounts.map((account) => {
             const unread = sourceMessages.filter((message) => message.accountId === account.id && message.unread).length
@@ -255,20 +264,27 @@ export default function App() {
                 <div className={selectedAccount === account.id ? 'account-row active' : 'account-row'}>
                   <button className="account-select" onClick={() => selectMailbox(account.id)}>
                     <span className="nav-icon account-inbox-icon"><InboxIcon /></span>
-                    <span className="account-copy"><strong>收件箱</strong><small>{account.email}</small></span>
+                    <span className="account-copy"><strong>{t('inbox')}</strong><small>{account.email}</small></span>
                     {unread > 0 && <b>{unread}</b>}
                   </button>
-                  {!demoMode && <button className="remove-account" onClick={() => void removeAccount(account)} title="移除邮箱"><TrashIcon /></button>}
+                  {!demoMode && <button className="remove-account" onClick={() => void removeAccount(account)} title={t('removeMailbox')}><TrashIcon /></button>}
                 </div>
               </div>
             )
           })}
-          {!visibleAccounts.length && <button className="empty-account-button" onClick={() => setShowAccountModal(true)}><PlusIcon />添加第一个邮箱</button>}
+          {!visibleAccounts.length && <button className="empty-account-button" onClick={() => setShowAccountModal(true)}><PlusIcon />{t('addFirstMailbox')}</button>}
         </div>
 
         <div className="sidebar-footer">
-          <div className="privacy-chip"><ShieldIcon /><div><strong>本地优先</strong><span>凭据经系统加密</span></div></div>
-          {demoMode && <button className="exit-demo" onClick={exitDemo}>退出演示模式</button>}
+          <label className="language-switcher">
+            <span>{t('language')}</span>
+            <select value={locale} onChange={(event) => setLocale(event.target.value as AppLocale)} aria-label={t('language')}>
+              <option value="en">English</option>
+              <option value="zh-CN">中文</option>
+            </select>
+          </label>
+          <div className="privacy-chip"><ShieldIcon /><div><strong>{t('localFirst')}</strong><span>{t('credentialsEncrypted')}</span></div></div>
+          {demoMode && <button className="exit-demo" onClick={exitDemo}>{t('exitDemo')}</button>}
         </div>
       </aside>
 
@@ -276,80 +292,83 @@ export default function App() {
         <header className="topbar">
           <div className="mailbox-heading">
             <h1>{mailboxTitle}</h1>
-            <span>{filteredMessages.length} 封邮件，{unreadCount} 封未读</span>
+            <span>{t('messagesSummary', { count: filteredMessages.length, unread: unreadCount })}</span>
           </div>
           <div className="topbar-actions">
-            {(searchOpen || query) && <label className="search-box"><SearchIcon /><input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} onBlur={() => !query && setSearchOpen(false)} placeholder="搜索" /></label>}
-            {!searchOpen && !query && <button className="icon-button" onClick={() => setSearchOpen(true)} title="搜索" aria-label="搜索"><SearchIcon /></button>}
-            <button className={syncing ? 'icon-button spinning' : 'icon-button'} onClick={() => demoMode ? setLastSynced(new Date().toISOString()) : void syncMail()} disabled={syncing || (!accounts.length && !demoMode)} title="刷新"><RefreshIcon /></button>
-            <button className="icon-button" onClick={() => setShowAccountModal(true)} title="添加邮箱" aria-label="添加邮箱"><PlusIcon /></button>
+            {(searchOpen || query) && <label className="search-box"><SearchIcon /><input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} onBlur={() => !query && setSearchOpen(false)} placeholder={t('search')} /></label>}
+            {!searchOpen && !query && <button className="icon-button" onClick={() => setSearchOpen(true)} title={t('search')} aria-label={t('search')}><SearchIcon /></button>}
+            <button className={syncing ? 'icon-button spinning' : 'icon-button'} onClick={() => demoMode ? setLastSynced(new Date().toISOString()) : void syncMail()} disabled={syncing || (!accounts.length && !demoMode)} title={t('refresh')} aria-label={t('refresh')}><RefreshIcon /></button>
+            <button className="icon-button" onClick={() => setShowAccountModal(true)} title={t('addMailbox')} aria-label={t('addMailbox')}><PlusIcon /></button>
           </div>
         </header>
 
-        {fatalError && <div className="error-banner"><AlertIcon /><span>{fatalError}</span><button onClick={() => setFatalError('')}>知道了</button></div>}
+        {fatalError && <div className="error-banner"><AlertIcon /><span>{fatalError}</span><button onClick={() => setFatalError('')}>{t('dismiss')}</button></div>}
         {syncErrors.length > 0 && (
-          <div className="warning-banner"><AlertIcon /><span>{syncErrors.length} 个邮箱同步失败：{syncErrors.map((error) => visibleAccounts.find((account) => account.id === error.accountId)?.label || error.accountId).join('、')}</span></div>
+          <div className="warning-banner"><AlertIcon /><span>{t('syncFailures', {
+            count: syncErrors.length,
+            accounts: syncErrors.map((error) => visibleAccounts.find((account) => account.id === error.accountId)?.label || error.accountId).join(locale === 'zh-CN' ? '、' : ', ')
+          })}</span></div>
         )}
 
         {!visibleAccounts.length ? (
           <section className="onboarding">
             <div className="onboarding-mail-icon" aria-hidden="true"><InboxIcon /></div>
-            <h2>添加邮箱账号</h2>
-            <p>连接 Gmail、iCloud、QQ、网易或其他支持 IMAP 的邮箱，在统一收件箱中查看邮件。</p>
+            <h2>{t('setupTitle')}</h2>
+            <p>{t('setupDescription')}</p>
             <div className="onboarding-actions">
-              <button className="primary-button large-button" onClick={() => setShowAccountModal(true)}>添加邮箱</button>
-              <button className="text-button" onClick={enterDemo}><EyeIcon />查看演示</button>
+              <button className="primary-button large-button" onClick={() => setShowAccountModal(true)}>{t('addEmail')}</button>
+              <button className="text-button" onClick={enterDemo}><EyeIcon />{t('viewDemo')}</button>
             </div>
-            <div className="trust-row"><span><ShieldIcon />本机处理</span><span><ShieldIcon />系统加密</span><span><ShieldIcon />默认屏蔽跟踪图片</span></div>
+            <div className="trust-row"><span><ShieldIcon />{t('localProcessing')}</span><span><ShieldIcon />{t('systemEncryption')}</span><span><ShieldIcon />{t('remoteImagesBlocked')}</span></div>
           </section>
         ) : (
           <div className="mail-layout">
             <section className={selectedMessage ? 'message-list mobile-hidden' : 'message-list'}>
               <div className="list-meta">
-                <span>{syncing ? '正在从邮箱服务器读取…' : lastSynced ? `更新于 ${formatMessageDate(lastSynced)}` : '尚未同步'}</span>
-                {demoMode && <span className="demo-badge">演示数据</span>}
+                <span>{syncing ? t('syncing') : lastSynced ? t('updatedAt', { time: formatMessageDate(lastSynced, locale) }) : t('notSynced')}</span>
+                {demoMode && <span className="demo-badge">{t('demoData')}</span>}
               </div>
               {filteredMessages.length ? filteredMessages.map((message) => {
                 const account = visibleAccounts.find((item) => item.id === message.accountId)
                 return (
                   <button key={message.id} className={`${selectedMessage?.id === message.id ? 'message-row selected' : 'message-row'}${message.unread ? ' unread' : ''}`} onClick={() => void openMessage(message)}>
                     <span className="message-account-line" style={{ backgroundColor: account?.color }} />
-                    <div className="message-row-top"><strong>{message.fromName}</strong><time>{formatMessageDate(message.date)}</time></div>
+                    <div className="message-row-top"><strong>{message.fromName}</strong><time>{formatMessageDate(message.date, locale)}</time></div>
                     <div className="message-subject">{message.subject}</div>
-                    <div className="message-preview">{demoMode ? demoPreviews[message.id] : message.fromAddress}</div>
+                    <div className="message-preview">{demoMode ? demoData.previews[message.id] : message.fromAddress}</div>
                     <div className="message-row-bottom"><span>{account?.label}</span><div>{message.hasAttachments && <PaperclipIcon />}{message.flagged && <StarIcon className="starred" />}</div></div>
                   </button>
                 )
               }) : (
-                <div className="list-empty"><InboxIcon /><h3>这里很安静</h3><p>{query ? '没有找到匹配的邮件。' : '这个邮箱暂时没有可显示的邮件。'}</p></div>
+                <div className="list-empty"><InboxIcon /><h3>{t('emptyTitle')}</h3><p>{query ? t('noSearchResults') : t('noMessages')}</p></div>
               )}
               {!demoMode && sourceMessages.length >= syncLimit && syncLimit < 200 && (
-                <button className="load-more" disabled={syncing} onClick={() => void loadMore()}>{syncing ? '正在加载…' : '加载更早的邮件'}</button>
+                <button className="load-more" disabled={syncing} onClick={() => void loadMore()}>{syncing ? t('loading') : t('loadEarlier')}</button>
               )}
             </section>
 
             <section className={selectedMessage ? 'reader open' : 'reader'}>
               {!selectedMessage ? (
-                <div className="reader-empty"><div className="reader-empty-icon"><InboxIcon /></div><h3>选择一封邮件开始阅读</h3><p>邮件正文只在你打开时从服务器读取。</p></div>
+                <div className="reader-empty"><div className="reader-empty-icon"><InboxIcon /></div><h3>{t('selectMessage')}</h3><p>{t('bodyFetchedOnOpen')}</p></div>
               ) : (
                 <>
-                  <button className="reader-back" onClick={clearSelectedMessage}><ArrowLeftIcon />返回邮件列表</button>
+                  <button className="reader-back" onClick={clearSelectedMessage}><ArrowLeftIcon />{t('backToList')}</button>
                   <header className="reader-header">
                     <div className="reader-account"><span style={{ backgroundColor: currentAccount?.color }} />{currentAccount?.label}</div>
                     <h2>{selectedMessage.subject}</h2>
                     <div className="sender-line">
                       <div className="avatar" style={{ backgroundColor: currentAccount?.color }}>{selectedMessage.fromName.slice(0, 1).toUpperCase()}</div>
                       <div><strong>{selectedMessage.fromName}</strong><span>{selectedMessage.fromAddress}</span></div>
-                      <time>{formatFullDate(selectedMessage.date)}</time>
+                      <time>{formatFullDate(selectedMessage.date, locale)}</time>
                     </div>
-                    <div className="recipient-line">收件人：{selectedMessage.to || currentAccount?.email}</div>
+                    <div className="recipient-line">{t('recipient', { recipient: selectedMessage.to || currentAccount?.email || '' })}</div>
                   </header>
-                  <div className="tracking-note"><ShieldIcon />为保护隐私，远程图片与跟踪像素已被拦截</div>
+                  <div className="tracking-note"><ShieldIcon />{t('privacyNote')}</div>
                   <div className="content-mode-bar">
-                    <span>正文显示</span>
+                    <span>{t('messageView')}</span>
                     <div>
-                      <button className={contentMode === 'html' ? 'active' : ''} onClick={() => setContentMode('html')}>清洁排版</button>
-                      <button className={contentMode === 'text' ? 'active' : ''} onClick={() => setContentMode('text')}>纯文本</button>
+                      <button className={contentMode === 'html' ? 'active' : ''} onClick={() => setContentMode('html')}>{t('cleanLayout')}</button>
+                      <button className={contentMode === 'text' ? 'active' : ''} onClick={() => setContentMode('text')}>{t('plainText')}</button>
                     </div>
                   </div>
                   <article className="message-content">
@@ -357,14 +376,14 @@ export default function App() {
                     {!detailLoading && detail && (
                       contentMode === 'html' && detail.html
                         ? <div className="email-html" dangerouslySetInnerHTML={{ __html: detail.html }} />
-                        : <pre className="email-text">{detail.text || '这封邮件没有可显示的纯文本正文。'}</pre>
+                        : <pre className="email-text">{detail.text || t('noPlainText')}</pre>
                     )}
                   </article>
                   {detail?.attachments.length ? (
                     <footer className="attachment-panel">
-                      <h3><PaperclipIcon />附件 · {detail.attachments.length}</h3>
+                      <h3><PaperclipIcon />{t('attachmentCount', { count: detail.attachments.length })}</h3>
                       <div className="attachment-list">{detail.attachments.map((attachment, index) => (
-                        <div className="attachment-card" key={`${attachment.filename}-${index}`}><span className="file-badge">{attachment.filename.split('.').at(-1)?.toUpperCase() || 'FILE'}</span><div><strong>{attachment.filename}</strong><small>{formatBytes(attachment.size)} · {attachment.contentType}</small></div><button disabled={demoMode} onClick={() => void downloadAttachment(attachment.index)}>{demoMode ? '演示' : '下载'}</button></div>
+                        <div className="attachment-card" key={`${attachment.filename}-${index}`}><span className="file-badge">{attachment.filename.split('.').at(-1)?.toUpperCase() || 'FILE'}</span><div><strong>{attachment.filename}</strong><small>{formatBytes(attachment.size)} · {attachment.contentType}</small></div><button disabled={demoMode} onClick={() => void downloadAttachment(attachment.index)}>{demoMode ? t('demo') : t('download')}</button></div>
                       ))}</div>
                       {downloadNotice && <div className="download-notice">{downloadNotice}</div>}
                     </footer>
@@ -376,7 +395,7 @@ export default function App() {
         )}
       </main>
 
-      {showAccountModal && <AccountModal onClose={() => setShowAccountModal(false)} onAdded={handleAdded} />}
+      {showAccountModal && <AccountModal locale={locale} t={t} onClose={() => setShowAccountModal(false)} onAdded={handleAdded} />}
     </div>
   )
 }
